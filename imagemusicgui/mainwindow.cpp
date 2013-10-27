@@ -3,118 +3,93 @@
 #include <QFile>
 #include <QtMath>
 #include <QElapsedTimer>
+#include <cmath>
+#include <QFileDialog>
+#include <QMenu>
+#include <QDebug>
+#include <QtConcurrent/QtConcurrent>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    convert("IMG_5056.JPG", "IMG_5056.wav");
-    //convert("test1.png", "test1.wav");
-    //convert("test2.png", "test2.wav");
-    //convert("mthsmeisterwerk2.png", "mthsmeisterwerk.wav");
-    //convert("test3.png", "test3.wav");
-    //convert("test4.png", "test4.wav");
+    ui->splitter->setStretchFactor(0, 5);
+    ui->splitter->setStretchFactor(1, 2);
+    ui->noteList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    ui->imageView->setContextMenuPolicy(Qt::CustomContextMenu);
+    ui->noteList->setContextMenuPolicy(Qt::CustomContextMenu);
+    ui->progressBar->hide();
+    connect(&this->futureWatcher, SIGNAL(finished()), this, SLOT(slot_finished()));
+    for (int i = 0; i < NUM_NOTES; i++) {
+        freqtable[i] = 440.0 * pow(2.0, (i - 45) / 12.0);
+        const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        QString noteName = QString("%1-%2\t%3 Hz").arg(noteNames[i % 12]).arg(i / 12 + 1).arg(freqtable[i]);
+        ui->noteCombo->addItem(noteName, i);
+        QListWidgetItem* listItem = new QListWidgetItem(noteName, ui->noteList);
+        listItem->setData(Qt::UserRole, i);
+    }
+    scene = new QGraphicsScene;
+    scene->addText("Right-click to load image.");
+    ui->imageView->setScene(scene);
+    ui->imageView->show();
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
-#include <QDebug>
-#define PI (3.1415926535897932384626433832795)
-#define PI2 (6.283185307179586476925286766559)
 
-struct SineOscil
+void MainWindow::saveWavFile(const QString &wavFile)
 {
-    qreal* table;
-    int tablesize;
-    int multi;
-    int srate;
-    qreal frequency;
-    SineOscil(){}
-    SineOscil(qreal frequency, int srate=44100)
-    {
-        this->frequency = frequency;
-        this->srate = srate;
-        multi = 1;
-        tablesize = srate / frequency;
-        while (tablesize < 1000) {
-            multi *= 2;
-            tablesize = srate * multi / frequency;
-        }
-        table = new qreal[tablesize];
-        for (int i = 0; i < tablesize; i++) {
-            table[i] = qSin(i * multi * PI2 / tablesize); // sinus wave
-            //table[i] = (i % (tablesize / multi) < (tablesize / multi / 2)) ? -1.0 : 1.0; // square wave
-            //table[i] = (i % (tablesize / multi)) * 2.0 / (tablesize / multi) - 1.0; // sawtooth wave
-            //table[i] = (qreal)(i) / (qreal)tablesize;
-        }
+    Q_ASSERT(!imageFile.isNull());
+
+    noteConfig.clear();
+    for (int i = 0; i < ui->noteList->count(); i++) {
+        int note = ui->noteList->item(i)->data(Qt::UserRole).toInt();
+        noteConfig.append(SineOscil(freqtable[note]));
     }
 
-    qreal value(int sample)
-    {
-        return table[sample % tablesize];
-    }
-};
 
-void MainWindow::convert(const QString &imageFile, const QString &wavFile)
-{
-    QImage img(imageFile);
-    Q_ASSERT(!img.isNull());
-    // frequency table
-    const int NUM_NOTES = 108;
-    qreal freqtable[NUM_NOTES];
-    for (int i = 0; i < NUM_NOTES; i++) {
-        freqtable[i] = 440.0 * pow(2.0, (i - 45) / 12.0);
-    }
+    Q_ASSERT(!noteConfig.empty());
 
-    const int NUM_CONFIG = 63;
-    SineOscil noteconfig[NUM_CONFIG];
-    for (int i = 0; i < NUM_CONFIG; i++) {
-        const int durOffsets[] = {0,2,4,5,7,9,11};
-        const int mollOffsets[] = {0,2,3,5,7,8,10};
-        int note = (i / 7) * 12 + durOffsets[i % 7];
-        //int note = (i / 7) * 12 + mollOffsets[i % 7];
-        qDebug() << note;
-        noteconfig[i] = SineOscil(freqtable[note]);
-    }
-
-    int* track = new int[NUM_CONFIG * img.width()];
-    for (int i = 0; i < NUM_CONFIG * img.width(); i++) {
+    int* track = new int[noteConfig.size() * imageFile.width()];
+    for (int i = 0; i < noteConfig.size() * imageFile.width(); i++) {
         track[i] = 0;
     }
-    qreal rfImageHeight = 1.0 / (qreal)img.height();
+    qreal rfImageHeight = 1.0 / (qreal)imageFile.height();
 
     qDebug() << "build track";
-    for (int y = 0; y < img.height(); y++) {
-        for (int x = 0; x < img.width(); x++) {
-            QColor c = QColor::fromRgb(img.pixel(x, y));
-            int row = (c.red() + c.green() + c.blue()) * NUM_CONFIG / (256 * 3);
-            track[row + x * NUM_CONFIG] += 1;
+    for (int y = 0; y < imageFile.height(); y++) {
+        for (int x = 0; x < imageFile.width(); x++) {
+            QColor c = QColor::fromRgb(imageFile.pixel(x, y));
+            int row = (c.red() + c.green() + c.blue()) * noteConfig.size() / (256 * 3);
+            track[row + x * noteConfig.size()] += 1;
         }
     }
 
     QElapsedTimer timer;
     qDebug() << "write audio";
-    int songLength = 30;
+    int songLength = ui->durationSpinBox->value();
     int sampleRate = 44100;
     int totalSamples = songLength * sampleRate;
     qreal* audio = new qreal[totalSamples];
     timer.start();
+    ui->progressBar->setRange(0, totalSamples);
     for (int i = 0; i < totalSamples; i++) {
-        qreal f = (qreal)i * (qreal)(img.width() - 1) / (qreal)totalSamples;
+        qreal f = (qreal)i * (qreal)(imageFile.width() - 1) / (qreal)totalSamples;
         qreal frac = f - std::floor(f);
         audio[i] = 0.0;
-        int* trackptr0 = &track[(int)(f) * NUM_CONFIG];
-        int* trackptr1 = &track[(int)(f + 1.0) * NUM_CONFIG];
-        for (int j = 0; j < NUM_CONFIG; j++) {
+        int* trackptr0 = &track[(int)(f) * noteConfig.size()];
+        int* trackptr1 = &track[(int)(f + 1.0) * noteConfig.size()];
+        for (int j = 0; j < noteConfig.size(); j++) {
             //qreal val = qSin(i * noteconfig[j].frequency * PI2 / sampleRate);
-            qreal val = noteconfig[j].value(i);
+            qreal val = noteConfig[j].value(i);
             audio[i] += val * trackptr0[j] * (1.0 - frac);
             audio[i] += val * trackptr1[j] * frac;
         }
         audio[i] *= rfImageHeight;
+        if (i % 1024 == 0) ui->progressBar->setValue(i);
         if (i % 44100 == 0) qDebug() << i / 44100.0 << " seconds";
     }
     qDebug() << "Time:" << timer.elapsed();
@@ -150,4 +125,67 @@ void MainWindow::convert(const QString &imageFile, const QString &wavFile)
     f.close();
 
     delete[] iAudio;
+}
+
+void MainWindow::on_noteList_customContextMenuRequested(const QPoint &pos)
+{
+    QMenu contextMenu(this);
+    contextMenu.addAction(ui->actionDelete_Note);
+    contextMenu.exec(ui->noteList->mapToGlobal(pos));
+}
+
+
+void MainWindow::on_addNoteButton_clicked()
+{
+    QListWidgetItem* item = new QListWidgetItem(ui->noteCombo->itemText(ui->noteCombo->currentIndex()));
+    int note = ui->noteCombo->itemData(ui->noteCombo->currentIndex(), Qt::UserRole).toInt();
+    item->setData(Qt::UserRole, note);
+    int row = 0;
+    while (ui->noteList->item(row)->data(Qt::UserRole).toInt() <= note) {
+        row++;
+    }
+    ui->noteList->insertItem(row, item);
+}
+
+void MainWindow::on_imageView_customContextMenuRequested(const QPoint &pos)
+{
+    Q_UNUSED(pos);
+    QString filename = QFileDialog::getOpenFileName(this, tr("Open Image"), ".", tr("Image Files (*.jpg *.png)"));
+    if (!filename.isNull()) {
+        imageFile = QImage(filename);
+        scene->clear();
+        scene->addPixmap(QPixmap::fromImage(imageFile));
+        ui->imageView->setScene(scene);
+        ui->imageView->fitInView(imageFile.rect(), Qt::KeepAspectRatio);
+        ui->imageView->show();
+        ui->saveButton->setEnabled(true);
+    }
+}
+
+void MainWindow::on_actionDelete_Note_triggered()
+{
+    QList<QListWidgetItem*> list = ui->noteList->selectedItems();
+    std::for_each(list.begin(), list.end(), [&](QListWidgetItem* i) {
+        delete ui->noteList->takeItem(ui->noteList->row(i));
+    });
+}
+
+void MainWindow::on_saveButton_clicked()
+{
+    QString filename = QFileDialog::getOpenFileName(this, tr("Save as"), ".", tr("WAV Files (*.wav)"));
+
+    if (!filename.isNull()) {
+        ui->progressBar->show();
+        ui->saveButton->setEnabled(false);
+        QFuture<void> future = QtConcurrent::run([this,filename](){
+            saveWavFile(filename);
+        });
+        futureWatcher.setFuture(future);
+    }
+}
+
+void MainWindow::slot_finished()
+{
+    ui->progressBar->hide();
+    ui->saveButton->setEnabled(true);
 }
