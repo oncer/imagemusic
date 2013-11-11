@@ -8,6 +8,7 @@
 #include <QtMath>
 #include <QGraphicsScene>
 #include <QFutureWatcher>
+#include <vector>
 
 namespace Ui {
 class MainWindow;
@@ -23,10 +24,11 @@ public:
 
     void saveWavFile(const QString& wavFile);
     
+signals:
+    void progressUpdated(int progress);
+
 private slots:
     void on_noteList_customContextMenuRequested(const QPoint &pos);
-
-    void on_addNoteButton_clicked();
 
     void on_imageView_customContextMenuRequested(const QPoint &pos);
 
@@ -36,15 +38,26 @@ private slots:
 
     void slot_finished();
 
+    void on_noteFromCombo_currentIndexChanged(int index);
+
+    void on_scaleCombo_currentIndexChanged(int index);
+
+    void on_noteToCombo_currentIndexChanged(int index);
+
+    void on_noteList_currentRowChanged(int currentRow);
+
 private:
+    void makeNoteList();
+    void makeGraphicsScene();
+
     struct SineOscil
     {
-        qreal* table;
+        std::vector<qreal> table;
         int tablesize;
         int multi;
         int srate;
         qreal frequency;
-        SineOscil(){}
+        SineOscil() {}
         SineOscil(qreal frequency, int srate=44100)
         {
             this->frequency = frequency;
@@ -55,7 +68,7 @@ private:
                 multi *= 2;
                 tablesize = srate * multi / frequency;
             }
-            table = new qreal[tablesize];
+            table.resize(tablesize);
             for (int i = 0; i < tablesize; i++) {
                 table[i] = qSin(i * multi * PI2 / tablesize); // sinus wave
                 //table[i] = (i % (tablesize / multi) < (tablesize / multi / 2)) ? -1.0 : 1.0; // square wave
@@ -78,6 +91,8 @@ private:
     QGraphicsScene *scene;
     QImage imageFile;
     QFutureWatcher<void> futureWatcher;
+
+    bool disableRecursion;
 };
 
 #endif // MAINWINDOW_H

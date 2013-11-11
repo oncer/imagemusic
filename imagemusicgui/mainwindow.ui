@@ -14,16 +14,13 @@
    <string>Image to Music converter</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <layout class="QGridLayout" name="gridLayout_3">
-    <item row="0" column="0">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
      <widget class="QSplitter" name="splitter">
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
-      <property name="handleWidth">
-       <number>6</number>
-      </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <layout class="QGridLayout" name="gridLayout_2">
         <item row="0" column="0" colspan="3">
          <widget class="QGraphicsView" name="imageView"/>
@@ -34,10 +31,10 @@
            <string> sec</string>
           </property>
           <property name="minimum">
-           <number>30</number>
+           <number>1</number>
           </property>
           <property name="maximum">
-           <number>300</number>
+           <number>301</number>
           </property>
           <property name="singleStep">
            <number>5</number>
@@ -68,18 +65,38 @@
       </widget>
       <widget class="QWidget" name="">
        <layout class="QGridLayout" name="gridLayout">
-        <item row="0" column="0" colspan="2">
-         <widget class="QListWidget" name="noteList"/>
+        <item row="3" column="1" colspan="3">
+         <widget class="QComboBox" name="scaleCombo"/>
         </item>
-        <item row="1" column="0" colspan="2">
-         <widget class="QComboBox" name="noteCombo"/>
-        </item>
-        <item row="2" column="0" colspan="2">
-         <widget class="QPushButton" name="addNoteButton">
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_3">
           <property name="text">
-           <string>Add Note</string>
+           <string>Scale</string>
           </property>
          </widget>
+        </item>
+        <item row="2" column="0" colspan="4">
+         <widget class="QListWidget" name="noteList"/>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Start</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QComboBox" name="noteFromCombo"/>
+        </item>
+        <item row="4" column="2">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>End</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="3">
+         <widget class="QComboBox" name="noteToCombo"/>
         </item>
        </layout>
       </widget>
