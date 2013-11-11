@@ -107,8 +107,8 @@ void MainWindow::saveWavFile(const QString &wavFile)
         for (int j = 0; j < noteConfig.size(); j++) {
             //qreal val = qSin(i * noteConfig[j].frequency * PI2 / sampleRate);
             qreal val = noteConfig[j].value(i);
-            audio[i] += val * trackptr0[j] * qCos(frac * PI / 2.0);
-            audio[i] += val * trackptr1[j] * qSin(frac * PI / 2.0);
+            audio[i] += val * trackptr0[j] * qPow(qCos(frac * PI / 2.0), 2.0);
+            audio[i] += val * trackptr1[j] * qPow(qSin(frac * PI / 2.0), 2.0);
             //audio[i] += val * trackptr0[j];
         }
         audio[i] *= rfImageHeight;
